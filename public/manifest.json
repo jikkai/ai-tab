@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "AI Tab",
+  "version": "0.1.0",
+  "description": "__MSG_extensionDescription__",
+  "minimum_chrome_version": "140",
+  "permissions": ["tabs", "tabGroups", "storage", "sidePanel"],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "http://[::1]/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
+  "action": {
+    "default_title": "__MSG_openPanel__",
+    "default_icon": {
+      "16": "icon-16.png",
+      "32": "icon-32.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "incognito": "not_allowed",
+  "default_locale": "en"
+}

@@ -1,0 +1,41 @@
+{
+  "name": "ai-tab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Group Chrome tabs with your own OpenAI-compatible AI service.",
+  "author": "白熱 <sonne@asaki.me>",
+  "type": "module",
+  "scripts": {
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "dev": "vite build --watch",
+    "preview": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "pnpm build && playwright test",
+    "check": "pnpm format:check && pnpm lint && pnpm test && pnpm build"
+  },
+  "dependencies": {
+    "lucide": "^1.53.0"
+  },
+  "devDependencies": {
+    "@amamo/oxlint-config": "1.1.1",
+    "@playwright/test": "^1.64.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/chrome": "^0.3.4",
+    "@types/node": "^26.0.0",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.3"
+  },
+  "engines": {
+    "node": "^22.18.0 || ^24.0.0 || >=26.0.0"
+  },
+  "packageManager": "pnpm@12.10.1"
+}

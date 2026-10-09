@@ -1,0 +1,14 @@
+{
+  "extensionDescription": {
+    "message": "连接自己的 AI 服务，把零散标签整理成清晰的 Chrome 分组。"
+  },
+  "openPanel": {
+    "message": "打开 AI Tab"
+  },
+  "sidePanelError": {
+    "message": "AI Tab 无法启用侧边栏，请重新加载扩展。"
+  },
+  "storageError": {
+    "message": "AI Tab 无法设置本地存储访问权限，请重新加载扩展。"
+  }
+}

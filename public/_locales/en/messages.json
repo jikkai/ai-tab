@@ -1,0 +1,14 @@
+{
+  "extensionDescription": {
+    "message": "Organize Chrome tabs into groups with your own AI service."
+  },
+  "openPanel": {
+    "message": "Open AI Tab"
+  },
+  "sidePanelError": {
+    "message": "AI Tab could not enable the side panel. Reload the extension."
+  },
+  "storageError": {
+    "message": "AI Tab could not restrict local storage access. Reload the extension."
+  }
+}
