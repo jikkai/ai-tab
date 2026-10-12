@@ -1,11 +1,11 @@
 import { createElement, Folder, Globe } from 'lucide';
-
 import type { Locale } from '../i18n';
-import type { TabRowElement } from './tab-row';
+import type { LinkRowElement } from './link-row';
 import { t } from '../i18n';
 
-interface ITabGroupOptions {
+interface IGroupCardOptions {
   locale: Locale;
+  kind: 'tabs' | 'bookmarks';
   title: string;
   color?: chrome.tabGroups.TabGroup['color'];
   ungrouped?: boolean;
@@ -19,12 +19,12 @@ interface ITabGroupOptions {
   };
 }
 
-export class TabGroupElement extends HTMLElement {
-  private options?: ITabGroupOptions;
-  private rows: TabRowElement[] = [];
+export class GroupCardElement extends HTMLElement {
+  private options?: IGroupCardOptions;
+  private rows: LinkRowElement[] = [];
   private count?: HTMLSpanElement;
 
-  configure(options: ITabGroupOptions, rows: TabRowElement[]): void {
+  configure(options: IGroupCardOptions, rows: LinkRowElement[]): void {
     this.options = options;
     this.rows = rows;
     this.render();
@@ -33,7 +33,12 @@ export class TabGroupElement extends HTMLElement {
   setSelectedCount(count: number): void {
     if (!this.count || !this.options) return;
     this.count.textContent = String(count);
-    this.count.setAttribute('aria-label', t(this.options.locale, 'tabCount', { count }));
+    this.count.setAttribute(
+      'aria-label',
+      t(this.options.locale, this.options.kind === 'tabs' ? 'tabCount' : 'bookmarkCount', {
+        count,
+      }),
+    );
   }
 
   private render(): void {
@@ -58,7 +63,9 @@ export class TabGroupElement extends HTMLElement {
       checkbox.disabled = options.disabled;
       checkbox.setAttribute(
         'aria-label',
-        t(options.locale, 'applyGroup', { title: options.title }),
+        t(options.locale, options.kind === 'tabs' ? 'applyGroup' : 'applyFolder', {
+          title: options.title,
+        }),
       );
       checkbox.addEventListener('change', () => {
         preview.checked = checkbox.checked;
@@ -73,14 +80,18 @@ export class TabGroupElement extends HTMLElement {
       title.disabled = options.disabled;
       title.setAttribute(
         'aria-label',
-        t(options.locale, 'groupName', { index: preview.index + 1 }),
+        t(options.locale, options.kind === 'tabs' ? 'groupName' : 'folderName', {
+          index: preview.index + 1,
+        }),
       );
       title.addEventListener('input', () => {
         options.title = title.value;
         this.setAttribute('aria-label', title.value);
         checkbox.setAttribute(
           'aria-label',
-          t(options.locale, 'applyGroup', { title: title.value }),
+          t(options.locale, options.kind === 'tabs' ? 'applyGroup' : 'applyFolder', {
+            title: title.value,
+          }),
         );
         preview.onRename(title.value);
       });

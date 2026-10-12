@@ -1,4 +1,58 @@
 export const en = {
+  organizerNavigation: 'Choose what to organize',
+  tabsMode: 'Tabs',
+  bookmarksMode: 'Bookmarks',
+  bookmarksTitle: 'Bookmark folders',
+  backToBookmarks: 'Back to bookmarks',
+  bookmarkRefresh: 'Refresh bookmarks',
+  bookmarkReading: 'Reading bookmarks…',
+  bookmarkPermissionTitle: 'Organize your saved links',
+  bookmarkPermissionHint:
+    'Allow bookmark access to choose a folder, review AI suggestions, and apply them. Only selected titles, hostnames, and child folder names are sent to your AI service.',
+  bookmarkGrant: 'Allow bookmark access',
+  bookmarkScope: 'Folder to organize',
+  bookmarkScopeHint:
+    'Organize links directly inside this folder. Existing subfolder contents stay in place. Only HTTP/HTTPS bookmarks are listed; managed folders are excluded.',
+  bookmarkSearch: 'Search bookmark titles or sites',
+  bookmarkNoMatches: 'No matching bookmarks',
+  bookmarkEmpty: 'No web bookmarks directly inside this folder. Choose another folder.',
+  bookmarkLimit:
+    'Up to {limit} bookmarks per request. The first {limit} are selected initially; organize larger folders in batches.',
+  bookmarkSuggestions: 'Suggested folders',
+  bookmarkPreviewHint:
+    'Edit new folder names or uncheck suggestions. New folders need two bookmarks; existing folders can receive one. Unchecked and unmatched bookmarks stay in place.',
+  bookmarkGenerate: 'Suggest folders',
+  bookmarkApply: 'Apply selected folders',
+  bookmarkUndo: 'Undo last bookmark organization',
+  bookmarkSelected: { one: 'Selected: {count} bookmark', other: 'Selected: {count} bookmarks' },
+  bookmarkPlanned: { one: 'Will move {count} bookmark', other: 'Will move {count} bookmarks' },
+  bookmarkSuggesting: 'Generating folder suggestions…',
+  bookmarkApplying: 'Organizing bookmarks…',
+  bookmarkUndoing: 'Restoring bookmarks…',
+  bookmarkComplete: {
+    one: 'Moved {count} bookmark. You can undo the last operation during this browser session.',
+    other: 'Moved {count} bookmarks. You can undo the last operation during this browser session.',
+  },
+  bookmarkRestored: {
+    one: 'Restored {count} bookmark. Items moved or edited afterward were skipped.',
+    other: 'Restored {count} bookmarks. Items moved or edited afterward were skipped.',
+  },
+  bookmarkNoSuggestions:
+    'No suitable changes found. Try a different selection or grouping preferences.',
+  applyFolder: 'Apply folder {title}',
+  folderName: 'Folder {index} name',
+  errorBookmarkPermission: 'Bookmark access was not granted. Allow access to use this feature.',
+  errorBookmarkPlan:
+    'The folder plan is invalid. Use unique new names and selected bookmarks only. New folders need two bookmarks; existing folders can receive one.',
+  errorBookmarkSelection:
+    'Select up to {limit} bookmarks. New folders need two bookmarks; existing folders can receive one.',
+  errorBookmarkChanged: 'Bookmarks or folders changed. Refresh and generate new suggestions.',
+  errorBookmarkRestoreSource:
+    'The original folder was moved, renamed, or removed. The undo record has been kept.',
+  errorBookmarkRollback:
+    'Some changes could not be rolled back. Use Undo last bookmark organization to retry.',
+  errorBookmarksBusy: 'Another panel is organizing bookmarks. Try again when it finishes.',
+  bookmarkCount: { one: '{count} bookmark', other: '{count} bookmarks' },
   addToExisting: 'Add to existing',
   errorGroupTarget: 'The model returned an invalid target group. Generate new suggestions.',
   errorTargetGroupChanged:
@@ -49,7 +103,7 @@ export const en = {
   saveSettings: 'Save settings',
   saveAndTest: 'Save and test',
   privacyKey:
-    'Your key stays in this browser and is not synced. Selected tab titles, hostnames, and group names in this window are sent directly to your AI service.',
+    'Your key stays in this browser and is not synced. Selected tab or bookmark titles, hostnames, and relevant group or child folder names are sent directly to your AI service.',
   privacyContent: 'Page content and full URLs are never sent.',
   installTitle: 'Open AI Tab in Chrome',
   installBuild:
@@ -75,7 +129,7 @@ export const en = {
     other: '{count} tabs',
   },
   windowCount: 'Tabs: {total} · Eligible: {eligible}',
-  selectTab: 'Select {title}',
+  selectItem: 'Select {title}',
   applyGroup: 'Apply group {title}',
   groupName: 'Group {index} name',
   unnamedGroup: 'Unnamed group',
@@ -86,7 +140,7 @@ export const en = {
   savingSettings: 'Saving settings…',
   savingLanguage: 'Changing language…',
   connectionSuccess: 'Connected. The model responded successfully and settings are saved.',
-  settingsSaved: 'Settings saved. Return to your tabs to start grouping.',
+  settingsSaved: 'Settings saved. Return to the organizer to get started.',
   noSuggestions:
     'No suitable grouping changes were found. Tabs already in a suitable group stay where they are. Try changing the selection or grouping preferences.',
   suggesting: 'Generating groups…',
@@ -119,7 +173,7 @@ export const en = {
   errorResponseJson: 'The AI service did not return valid JSON.',
   errorResponseText:
     'The API did not return text. Use a text model that supports Chat Completions.',
-  errorTruncated: 'The model output was truncated. Select fewer tabs and try again.',
+  errorTruncated: 'The model output was truncated. Select fewer items and try again.',
   errorGroupJson: 'The model did not return valid group JSON. Try again or choose another model.',
   errorGroupStructure:
     'The model returned an invalid grouping structure. Generate new suggestions.',

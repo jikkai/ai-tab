@@ -1,6 +1,5 @@
 import type { BrowserContext, Page } from '@playwright/test';
 import type { Server } from 'node:http';
-
 import { chromium, expect, test } from '@playwright/test';
 import { once } from 'node:events';
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -37,31 +36,48 @@ test.beforeEach(async ({ locale }) => {
           return;
         }
         const tabs =
-          payload.messages.length > 1 ? JSON.parse(payload.messages[1].content).tabs : [];
-        const content = tabs.length
+          payload.messages.length > 1 ? (JSON.parse(payload.messages[1].content).tabs ?? []) : [];
+        const bookmarks =
+          payload.messages.length > 1
+            ? (JSON.parse(payload.messages[1].content).bookmarks ?? [])
+            : [];
+        const content = bookmarks.length
           ? JSON.stringify(
               groupingResponse ?? {
                 groups: [
                   {
-                    title: payload.messages[0].content.includes('Use concise English names')
-                      ? 'Development'
-                      : '开发资料',
-                    tabIds: tabs.slice(0, 2).map((tab: { id: number }) => tab.id),
+                    title: '开发资料',
+                    bookmarkIds: bookmarks
+                      .slice(0, 2)
+                      .map((bookmark: { id: string }) => bookmark.id),
                   },
-                  ...(tabs.length >= 4
-                    ? [
-                        {
-                          title: payload.messages[0].content.includes('Use concise English names')
-                            ? 'Reading'
-                            : '阅读清单',
-                          tabIds: tabs.slice(2, 4).map((tab: { id: number }) => tab.id),
-                        },
-                      ]
-                    : []),
                 ],
               },
             )
-          : 'OK';
+          : tabs.length
+            ? JSON.stringify(
+                groupingResponse ?? {
+                  groups: [
+                    {
+                      title: payload.messages[0].content.includes('Use concise English names')
+                        ? 'Development'
+                        : '开发资料',
+                      tabIds: tabs.slice(0, 2).map((tab: { id: number }) => tab.id),
+                    },
+                    ...(tabs.length >= 4
+                      ? [
+                          {
+                            title: payload.messages[0].content.includes('Use concise English names')
+                              ? 'Reading'
+                              : '阅读清单',
+                            tabIds: tabs.slice(2, 4).map((tab: { id: number }) => tab.id),
+                          },
+                        ]
+                      : []),
+                  ],
+                },
+              )
+            : 'OK';
         response
           .writeHead(200, { 'Content-Type': 'application/json' })
           .end(JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] }));
@@ -93,6 +109,8 @@ test.beforeEach(async ({ locale }) => {
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   // Native permission dialogs are not available to headless Playwright.
   manifest.host_permissions = ['http://127.0.0.1/*'];
+  manifest.permissions.push('bookmarks');
+  manifest.optional_permissions = [];
   await writeFile(manifestPath, JSON.stringify(manifest));
   context = await chromium.launchPersistentContext('', {
     channel: 'chromium',
@@ -149,6 +167,209 @@ async function configure(): Promise<void> {
   await expect(panel.getByRole('status').filter({ hasText: '连接成功' })).toBeVisible();
   await panel.getByRole('button', { name: '返回标签', exact: true }).last().click();
 }
+
+async function openBookmarks() {
+  const fixture = await panel.evaluate(async () => {
+    const root = (await chrome.bookmarks.getTree())[0]!;
+    const bar = root.children!.find((folder) => folder.folderType === 'bookmarks-bar')!;
+    const source = await chrome.bookmarks.create({ parentId: bar.id, title: '待整理' });
+    const first = await chrome.bookmarks.create({
+      parentId: source.id,
+      title: 'Vite 书签',
+      url: 'https://vite.dev/private?token=bookmark-secret',
+    });
+    const target = await chrome.bookmarks.create({ parentId: source.id, title: '已有资料' });
+    const retained = await chrome.bookmarks.create({
+      parentId: target.id,
+      title: '不参与整理的书签',
+      url: 'https://retained.example/',
+    });
+    const second = await chrome.bookmarks.create({
+      parentId: source.id,
+      title: 'Tailwind 书签',
+      url: 'https://tailwindcss.com/',
+    });
+    const third = await chrome.bookmarks.create({
+      parentId: source.id,
+      title: '阅读书签',
+      url: 'https://reading.example/',
+    });
+    const bookmarklet = await chrome.bookmarks.create({
+      parentId: source.id,
+      title: '脚本书签',
+      url: 'javascript:alert(1)',
+    });
+    return { source, first, second, third, target, retained, bookmarklet };
+  });
+  await panel.locator('#open-bookmarks').click();
+  await panel.getByLabel('要整理的文件夹', { exact: true }).selectOption(fixture.source.id);
+  await expect(panel.locator('#bookmark-count')).toHaveText('已选择 3 个书签');
+  return fixture;
+}
+
+test('organizes native bookmarks after preview and restores order after reopening the panel', async () => {
+  await configure();
+  const fixture = await openBookmarks();
+  await expect(panel.getByRole('checkbox', { name: '选择 脚本书签', exact: true })).toHaveCount(0);
+  await panel.getByRole('button', { name: '生成分类建议', exact: true }).click();
+  await expect(panel.getByLabel('文件夹 1 名称')).toHaveValue('开发资料');
+  const before = await panel.evaluate((id) => chrome.bookmarks.getChildren(id), fixture.source.id);
+  expect(before.map((node) => node.id)).toEqual([
+    fixture.first.id,
+    fixture.target.id,
+    fixture.second.id,
+    fixture.third.id,
+    fixture.bookmarklet.id,
+  ]);
+  const request = JSON.stringify(requests.at(-1));
+  expect(request).not.toContain('bookmark-secret');
+  expect(request).not.toContain('不参与整理的书签');
+  await panel.getByLabel('文件夹 1 名称').fill('前端开发');
+  await panel.locator('#open-tabs').click();
+  await panel.locator('#open-bookmarks').click();
+  await expect(panel.getByLabel('文件夹 1 名称')).toHaveValue('前端开发');
+  await panel.setViewportSize({ width: 320, height: 740 });
+  expect(await panel.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await panel.emulateMedia({ colorScheme: 'dark' });
+  await panel.screenshot({
+    path: test.info().outputPath('bookmarks-preview-dark.png'),
+    fullPage: true,
+  });
+  await panel.emulateMedia({ colorScheme: 'light' });
+  await panel.screenshot({ path: test.info().outputPath('bookmarks-preview.png'), fullPage: true });
+  await panel.getByRole('button', { name: '应用选中分类', exact: true }).click();
+  await expect(panel.locator('#bookmark-notice')).toContainText('已整理 2 个书签');
+  const created = await panel.evaluate(
+    async (id) =>
+      (await chrome.bookmarks.getChildren(id)).find((node) => node.title === '前端开发'),
+    fixture.source.id,
+  );
+  expect(created).toBeDefined();
+  expect(
+    (await panel.evaluate((id) => chrome.bookmarks.getChildren(id), created!.id)).map(
+      (node) => node.id,
+    ),
+  ).toEqual([fixture.first.id, fixture.second.id]);
+  await panel.reload();
+  await panel.locator('#open-bookmarks').click();
+  await panel.getByRole('button', { name: '撤销上次书签整理' }).click();
+  await expect(panel.locator('#bookmark-notice')).toContainText('已恢复 2 个书签');
+  const restored = await panel.evaluate(
+    (id) => chrome.bookmarks.getChildren(id),
+    fixture.source.id,
+  );
+  expect(restored.map(({ id, title, url }) => ({ id, title, url }))).toEqual(
+    before.map(({ id, title, url }) => ({ id, title, url })),
+  );
+  expect(
+    (await panel.evaluate((id) => chrome.bookmarks.getChildren(id), fixture.target.id)).map(
+      (node) => node.id,
+    ),
+  ).toEqual([fixture.retained.id]);
+});
+
+test('reviews individual bookmark moves and preserves edits while changing language', async () => {
+  await configure();
+  const fixture = await openBookmarks();
+  groupingResponse = {
+    groups: [
+      { targetFolderId: fixture.target.id, bookmarkIds: [fixture.first.id, fixture.second.id] },
+    ],
+  };
+  await panel.getByRole('button', { name: '生成分类建议', exact: true }).click();
+  await expect(panel.getByLabel('文件夹 1 名称')).toHaveAttribute('readonly', '');
+  await panel.getByRole('checkbox', { name: '选择 Tailwind 书签', exact: true }).uncheck();
+  await expect(panel.locator('#bookmark-count')).toHaveText('将移动 1 个书签');
+  await panel.getByRole('button', { name: 'AI 服务设置', exact: true }).click();
+  await panel.getByLabel('界面语言', { exact: true }).selectOption('en');
+  await panel.getByRole('button', { name: 'Back to bookmarks', exact: true }).last().click();
+  await expect(
+    panel.getByRole('checkbox', { name: 'Select Tailwind 书签', exact: true }),
+  ).not.toBeChecked();
+  await panel.getByRole('button', { name: 'Apply selected folders', exact: true }).click();
+  await expect(panel.locator('#bookmark-notice')).toContainText('Moved 1 bookmark.');
+  expect(
+    (await panel.evaluate((id) => chrome.bookmarks.getChildren(id), fixture.target.id)).map(
+      (node) => node.id,
+    ),
+  ).toEqual([fixture.retained.id, fixture.first.id]);
+  await panel.getByRole('button', { name: 'Undo last bookmark organization', exact: true }).click();
+  await expect(panel.locator('#bookmark-notice')).toContainText('Restored 1 bookmark.');
+  expect(
+    (await panel.evaluate((id) => chrome.bookmarks.getChildren(id), fixture.target.id)).map(
+      (node) => node.id,
+    ),
+  ).toEqual([fixture.retained.id]);
+  await panel.locator('#open-tabs').click();
+  await expect(panel.locator('#selection-count')).toHaveText('4 tabs selected');
+});
+
+test('rejects a stale bookmark preview and provider errors without moving bookmarks', async () => {
+  await configure();
+  const fixture = await openBookmarks();
+  await panel.locator('#bookmark-analyze').click();
+  await expect(panel.getByLabel('文件夹 1 名称')).toBeVisible();
+  await panel.evaluate(
+    (id) => chrome.bookmarks.update(id, { title: '手动修改' }),
+    fixture.first.id,
+  );
+  await panel.locator('#bookmark-apply').click();
+  await expect(panel.locator('#bookmark-notice')).toContainText('书签或文件夹已发生变化');
+  expect(
+    (await panel.evaluate((id) => chrome.bookmarks.get(id), fixture.first.id))[0]!.parentId,
+  ).toBe(fixture.source.id);
+  await panel.locator('#bookmark-refresh').click();
+  failure = true;
+  await panel.locator('#bookmark-analyze').click();
+  await expect(panel.locator('#bookmark-notice')).toContainText('HTTP 401');
+  await expect(panel.locator('#bookmark-notice')).not.toContainText('Private provider error');
+  expect(
+    (await panel.evaluate((id) => chrome.bookmarks.getChildren(id), fixture.source.id)).filter(
+      (node) => !node.url,
+    ),
+  ).toHaveLength(1);
+});
+
+test('shows the permission gate, handles refusal, and keeps tab organization available', async () => {
+  await panel.evaluate(() => {
+    chrome.permissions.contains = async () => false;
+    chrome.permissions.request = async () => false;
+  });
+  await panel.locator('#open-bookmarks').click();
+  await expect(panel.getByRole('button', { name: '允许访问书签' })).toBeVisible();
+  await panel.getByRole('button', { name: '允许访问书签' }).click();
+  await expect(panel.locator('#bookmark-notice')).toContainText('尚未获得书签权限');
+  expect(requests).toEqual([]);
+  await panel.locator('#open-tabs').click();
+  await expect(panel.locator('#selection-count')).toHaveText('已选择 4 个标签');
+});
+
+test('limits large bookmark selections while allowing clear, search and folder navigation', async () => {
+  const fixture = await openBookmarks();
+  await panel.evaluate(async (parentId) => {
+    await Array.from({ length: 198 }, (_, index) => index).reduce(async (previous, index) => {
+      await previous;
+      await chrome.bookmarks.create({
+        parentId,
+        title: `资料 ${index}`,
+        url: `https://example.com/${index}`,
+      });
+    }, Promise.resolve());
+  }, fixture.source.id);
+  await panel.locator('#bookmark-refresh').click();
+  await expect(panel.locator('#bookmark-count')).toHaveText('已选择 200 个书签');
+  await expect(panel.getByRole('checkbox', { name: '选择 资料 197', exact: true })).toBeDisabled();
+  await panel.locator('#bookmark-select-all').click();
+  await expect(panel.locator('#bookmark-count')).toHaveText('已选择 0 个书签');
+  await panel.getByLabel('搜索书签标题或域名').fill('资料 197');
+  await panel.locator('#bookmark-select-all').click();
+  await expect(panel.locator('#bookmark-count')).toHaveText('已选择 1 个书签');
+  await panel.getByLabel('要整理的文件夹', { exact: true }).selectOption(fixture.target.id);
+  await expect(panel.locator('#bookmark-list input')).toHaveCount(1);
+  await expect(
+    panel.getByRole('checkbox', { name: '选择 不参与整理的书签', exact: true }),
+  ).toBeChecked();
+});
 
 test('configure, preview, edit, apply and undo real Chrome groups after reopening the panel', async () => {
   await configure();
@@ -237,7 +458,7 @@ test('keeps preview colors when only some suggested groups are applied', async (
   await panel.getByRole('button', { name: '生成分组建议' }).click();
   await expect(panel.getByLabel('分组 2 名称')).toBeVisible();
   const colors = await panel
-    .locator('#group-list ai-tab-group')
+    .locator('#group-list ai-group-card')
     .evaluateAll((cards) => cards.map((card) => card.getAttribute('data-color')));
   expect(new Set(colors).size).toBe(2);
   expect(colors).not.toContain(null);

@@ -9,9 +9,9 @@ import {
   Settings2,
   Sparkles,
 } from 'lucide';
-
 import type { LanguagePreference, Locale } from '../i18n';
 import type { IGroup, ISettings, ITab } from '../types';
+import type { BookmarkOrganizerElement } from './bookmarks';
 import type { ISettingsSaveDetail, SettingsFormElement } from './settings-form';
 import { suggestGroups, testConnection } from '../ai';
 import { LocalizedError } from '../errors';
@@ -27,8 +27,8 @@ import {
 import { DEFAULT_SETTINGS, loadSettings, permissionFor, saveSettings } from '../settings';
 import { applyGroups, readUndo, readWindow, undoLast } from '../tabs';
 import { element } from '../ui';
-import { TabGroupElement } from './tab-group';
-import { TabRowElement } from './tab-row';
+import { GroupCardElement } from './group-card';
+import { LinkRowElement } from './link-row';
 
 export class AiTabAppElement extends HTMLElement {
   private initialized = false;
@@ -46,6 +46,8 @@ export class AiTabAppElement extends HTMLElement {
   private checkedGroups = new Set<number>();
   private preview = false;
   private settingsOpen = false;
+  private mode: 'tabs' | 'bookmarks' = 'tabs';
+  private bookmarkBusy = false;
   private busy = false;
   private hasUndo = false;
   private controller?: AbortController;
@@ -67,6 +69,11 @@ export class AiTabAppElement extends HTMLElement {
           <i data-lucide="settings-2" class="size-3.5" aria-hidden="true"></i>
         </button>
       </header>
+
+      <nav id="organizer-switch" class="flex gap-1 border-b border-neutral-200 px-4 py-2 dark:border-neutral-800" data-i18n-label="organizerNavigation">
+        <button id="open-tabs" class="cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium aria-pressed:bg-neutral-100 dark:aria-pressed:bg-neutral-900 disabled:opacity-45" aria-pressed="true" data-i18n="tabsMode"></button>
+        <button id="open-bookmarks" class="cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium aria-pressed:bg-neutral-100 dark:aria-pressed:bg-neutral-900 disabled:opacity-45" aria-pressed="false" data-i18n="bookmarksMode"></button>
+      </nav>
 
       <main class="flex-1 px-4 py-4">
         <div id="notice" class="rounded-lg border border-neutral-200 bg-white p-3 text-xs leading-relaxed text-neutral-900 data-[error=true]:border-neutral-900 data-[error=true]:font-medium dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-50 dark:data-[error=true]:border-neutral-50 mb-4" role="status" aria-live="polite" hidden></div>
@@ -119,6 +126,7 @@ export class AiTabAppElement extends HTMLElement {
           </section>
         </section>
 
+        <ai-bookmark-organizer id="bookmarks-view" hidden></ai-bookmark-organizer>
         <ai-tab-settings id="settings-view" role="region" aria-labelledby="settings-title" hidden></ai-tab-settings>
 
         <section id="install-view" class="rounded-lg border border-dashed border-neutral-200 px-5 py-8 text-center dark:border-neutral-800" hidden>
@@ -187,6 +195,7 @@ export class AiTabAppElement extends HTMLElement {
     document.title = t(this.locale, 'pageTitle');
     localize(this, this.locale);
     element<SettingsFormElement>(this, 'settings-view').setLanguage(this.locale, this.language);
+    element<BookmarkOrganizerElement>(this, 'bookmarks-view').configure(this.settings, this.locale);
     if (this.preview) this.renderGroups();
     else if (this.windowId !== -1) this.renderTabs();
     this.controls();
@@ -220,9 +229,23 @@ export class AiTabAppElement extends HTMLElement {
         eligible: this.tabs.length,
       });
     }
-    const settingsLabel = t(this.locale, this.settingsOpen ? 'backToTabs' : 'aiSettings');
+    const settingsLabel = t(
+      this.locale,
+      this.settingsOpen ? (this.mode === 'tabs' ? 'backToTabs' : 'backToBookmarks') : 'aiSettings',
+    );
     element(this, 'settings-toggle').setAttribute('aria-label', settingsLabel);
     element(this, 'settings-toggle').title = settingsLabel;
+    element<HTMLButtonElement>(this, 'settings-toggle').disabled = this.busy || this.bookmarkBusy;
+    element(this, 'organizer-switch').hidden = !this.extension || this.settingsOpen;
+    for (const mode of ['tabs', 'bookmarks'] as const) {
+      const button = element<HTMLButtonElement>(this, `open-${mode}`);
+      button.setAttribute('aria-pressed', String(this.mode === mode));
+      button.disabled = this.busy || this.bookmarkBusy;
+    }
+    element(this, 'organize-view').hidden =
+      this.settingsOpen || this.mode !== 'tabs' || !this.extension;
+    element(this, 'bookmarks-view').hidden =
+      this.settingsOpen || this.mode !== 'bookmarks' || !this.extension;
     element(this, 'analyze').hidden = this.preview;
     element<HTMLButtonElement>(this, 'analyze').disabled =
       this.busy ||
@@ -239,7 +262,8 @@ export class AiTabAppElement extends HTMLElement {
           : !group.tabIds.length,
       );
     element(this, 'undo').hidden = !this.hasUndo;
-    element(this, 'action-bar').hidden = this.settingsOpen || this.busy || !this.extension;
+    element(this, 'action-bar').hidden =
+      this.settingsOpen || this.busy || !this.extension || this.mode !== 'tabs';
     element(this, 'busy-bar').hidden = !this.busy;
     element(this, 'cancel').hidden = !this.controller;
     element<HTMLButtonElement>(this, 'cancel').disabled = false;
@@ -299,25 +323,28 @@ export class AiTabAppElement extends HTMLElement {
     }
     element(this, 'tab-list').replaceChildren(
       ...Array.from(sections, ([groupId, sectionTabs]) => {
-        const card = new TabGroupElement();
+        const card = new GroupCardElement();
         const rows = sectionTabs.map((tab) => {
-          const row = new TabRowElement();
-          row.configure(tab, {
-            locale: this.locale,
-            checked: this.selected.has(tab.id),
-            disabled: this.busy,
-            showGroup: false,
-            onChange: (checked) => {
-              if (checked) this.selected.add(tab.id);
-              else this.selected.delete(tab.id);
-              this.controls();
+          const row = new LinkRowElement();
+          row.configure(
+            { title: tab.title, description: tab.hostname },
+            {
+              locale: this.locale,
+              checked: this.selected.has(tab.id),
+              disabled: this.busy,
+              onChange: (checked) => {
+                if (checked) this.selected.add(tab.id);
+                else this.selected.delete(tab.id);
+                this.controls();
+              },
             },
-          });
+          );
           return row;
         });
         card.configure(
           {
             locale: this.locale,
+            kind: 'tabs',
             title:
               groupId === -1
                 ? t(this.locale, 'ungrouped')
@@ -348,30 +375,39 @@ export class AiTabAppElement extends HTMLElement {
   private renderGroups(): void {
     element(this, 'group-list').replaceChildren(
       ...this.groups.map((group, index) => {
-        const card = new TabGroupElement();
+        const card = new GroupCardElement();
         const rows = group.tabIds.flatMap((id) => {
           const tab = this.tabs.find((item) => item.id === id);
           if (!tab) return [];
-          const row = new TabRowElement();
-          row.configure(tab, {
-            locale: this.locale,
-            checked: this.included.has(id),
-            disabled: this.busy,
-            showGroup: true,
-            onChange: (checked) => {
-              if (checked) this.included.add(id);
-              else this.included.delete(id);
-              card.setSelectedCount(
-                group.tabIds.filter((tabId) => this.included.has(tabId)).length,
-              );
-              this.controls();
+          const row = new LinkRowElement();
+          row.configure(
+            {
+              title: tab.title,
+              description:
+                tab.groupId !== -1
+                  ? `${tab.hostname} · ${tab.groupTitle || t(this.locale, 'unnamedGroup')}`
+                  : tab.hostname,
             },
-          });
+            {
+              locale: this.locale,
+              checked: this.included.has(id),
+              disabled: this.busy,
+              onChange: (checked) => {
+                if (checked) this.included.add(id);
+                else this.included.delete(id);
+                card.setSelectedCount(
+                  group.tabIds.filter((tabId) => this.included.has(tabId)).length,
+                );
+                this.controls();
+              },
+            },
+          );
           return [row];
         });
         card.configure(
           {
             locale: this.locale,
+            kind: 'tabs',
             title:
               group.targetGroupId === undefined
                 ? group.title
@@ -429,11 +465,41 @@ export class AiTabAppElement extends HTMLElement {
     form.hideKey();
     element(this, 'organize-view').hidden = open;
     if (open) form.load(this.settings);
+    element<BookmarkOrganizerElement>(this, 'bookmarks-view').configure(this.settings, this.locale);
+    const closeLabel = form.querySelector<HTMLElement>(
+      '[data-i18n="backToTabs"], [data-i18n="backToBookmarks"]',
+    );
+    if (closeLabel) {
+      closeLabel.dataset.i18n = this.mode === 'tabs' ? 'backToTabs' : 'backToBookmarks';
+      closeLabel.textContent = t(
+        this.locale,
+        closeLabel.dataset.i18n as 'backToTabs' | 'backToBookmarks',
+      );
+    }
     this.notice('');
     this.controls();
   }
 
   private bindEvents(): void {
+    element(this, 'open-tabs').addEventListener('click', () => {
+      this.mode = 'tabs';
+      this.notice('');
+      this.controls();
+    });
+    element(this, 'open-bookmarks').addEventListener('click', async () => {
+      if (this.mode === 'bookmarks') return;
+      this.mode = 'bookmarks';
+      this.notice('');
+      this.controls();
+      const bookmarks = element<BookmarkOrganizerElement>(this, 'bookmarks-view');
+      bookmarks.configure(this.settings, this.locale);
+      await bookmarks.activate();
+    });
+    this.addEventListener('bookmarks-busy', (event) => {
+      this.bookmarkBusy = (event as CustomEvent<boolean>).detail;
+      this.controls();
+    });
+    this.addEventListener('open-settings', () => this.showSettings(true));
     element(this, 'settings-toggle').addEventListener('click', () =>
       this.showSettings(!this.settingsOpen),
     );
