@@ -1,5 +1,4 @@
 import { ArrowLeft, ChevronDown, createElement } from 'lucide';
-
 import type { LanguagePreference, Locale } from '../i18n';
 import type { ISettings } from '../types';
 import { isLanguagePreference, localize, t } from '../i18n';

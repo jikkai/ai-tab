@@ -5,6 +5,7 @@
   "description": "__MSG_extensionDescription__",
   "minimum_chrome_version": "140",
   "permissions": ["tabs", "tabGroups", "storage", "sidePanel"],
+  "optional_permissions": ["bookmarks"],
   "optional_host_permissions": [
     "https://*/*",
     "http://localhost/*",

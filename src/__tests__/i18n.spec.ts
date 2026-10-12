@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
 import { LocalizedError } from '../errors';
 import { errorMessage, loadLanguage, resolveLocale, saveLanguage, t } from '../i18n';
 

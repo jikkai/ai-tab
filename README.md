@@ -4,7 +4,7 @@
 
 <h1 align="center">AI Tab</h1>
 
-<p align="center">Organize Chrome tabs with your own AI service.</p>
+<p align="center">Organize Chrome tabs and bookmarks with your own AI service.</p>
 
 <p align="center">
   <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a>
@@ -27,6 +27,7 @@ Select your tabs, review the suggestions, and apply them to Chrome's native tab 
 - **Undo the last change.** Restore previous group membership, including after closing and reopening the side panel.
 - **Find the tabs you need.** Search titles, sites, and group names. Select both grouped and ungrouped tabs for another pass.
 - **Choose your language.** English and Simplified Chinese, with automatic light and dark appearance.
+- **Organize bookmarks.** Choose a folder, preview suggested categories, and move selected bookmarks into existing or new child folders. Undo the last bookmark operation independently of tab grouping.
 
 ## Getting started
 
@@ -82,13 +83,22 @@ Pinned, loading, split-view, private, and non-HTTP/HTTPS tabs are excluded. Unse
 
 **Undo last grouping** restores the previous group membership for the latest operation. Undoing a merge moves back only the tabs added by that operation. Recovery is kept for the current browser session, survives reopening the panel, and does not restore tab order or overwrite later manual group edits. See [data and permissions](docs/privacy.md) for details.
 
+## Bookmark organization
+
+Open **Bookmarks** in the panel and click **Allow bookmark access** the first time. Choose a folder, select bookmarks, and click **Suggest folders**. Review the suggestions, edit new folder names or uncheck items, then click **Apply selected folders**. This uses the same AI service and grouping preferences as tabs.
+
+Only the selected folder's direct HTTP/HTTPS bookmarks are considered. Existing subfolder contents, managed bookmarks, titles, and URLs are preserved. Matching child folders can receive one bookmark; new folders require at least two. Up to 200 bookmarks can be selected per request, with the first 200 selected initially. Organize larger folders in several passes.
+
+**Undo last bookmark organization** restores the previous folder and sibling positions where possible. It survives reopening the panel during the same browser session. Items moved or edited afterward are skipped; only empty, unchanged folders created by this operation are removed. The extension keeps one bookmark undo record shared across windows, separately from tab undo records. Changes to native bookmarks may sync through Chrome if bookmark sync is enabled.
+
 ## Privacy
 
 Requests go directly to the AI service you configure. Your API key, if provided, is sent to that service for authentication. AI Tab has no application server, analytics, or telemetry.
 
 - **Sent to your service:** selected tab IDs, titles, hostnames, and current group IDs; existing group IDs and names in the current window; your model choice and grouping preferences.
+- **For bookmark suggestions:** selected bookmark IDs, titles and hostnames, and the IDs and names of writable child folders. Complete URLs and other bookmark titles are excluded.
 - **Not included:** page content, full tab URLs, cookies, browsing history, or unselected tab titles.
-- **Stored in your browser:** service settings and language preference in local extension storage; original tab URLs and group metadata in session storage for undo. Neither uses Chrome Sync.
+- **Stored in your browser:** service settings and language preference in local extension storage; original tab/bookmark URLs, group/folder metadata and bookmark positions in session storage for undo. Extension storage does not use Chrome Sync.
 
 Tab titles, group names, and preferences can contain private information. Your chosen service handles this data under its own policy. Read the [data and permissions guide](docs/privacy.md) for the full request, storage, and permission details.
 

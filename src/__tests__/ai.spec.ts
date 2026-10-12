@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
-import { parseGroups, suggestGroups, testConnection } from '../ai';
+import {
+  parseBookmarkGroups,
+  parseGroups,
+  suggestBookmarkGroups,
+  suggestGroups,
+  testConnection,
+} from '../ai';
 
 const settings = {
   baseUrl: 'https://ai.example/v1',
@@ -242,5 +247,111 @@ describe('AI requests', () => {
     await expect(suggestGroups(settings, tabs, [], 'en', controller.signal)).rejects.toThrow(
       'errorCancelled',
     );
+  });
+});
+
+describe('AI bookmark classification', () => {
+  const bookmarks = [
+    {
+      id: 'a',
+      parentId: '1',
+      index: 0,
+      title: 'Docs',
+      hostname: 'docs.example',
+      url: 'https://docs.example/private?token=secret',
+    },
+    {
+      id: 'b',
+      parentId: '1',
+      index: 1,
+      title: 'Repo',
+      hostname: 'code.example',
+      url: 'https://code.example/private',
+    },
+  ];
+  const folders = [{ id: '20', parentId: '1', title: 'Development', path: 'Other / Development' }];
+
+  it('accepts native string IDs and preserves existing folder names', () => {
+    expect(
+      parseBookmarkGroups(
+        JSON.stringify({
+          groups: [{ targetFolderId: '20', title: 'Changed', bookmarkIds: ['a'] }],
+        }),
+        bookmarks,
+        folders,
+      ),
+    ).toEqual([{ targetFolderId: '20', title: 'Development', bookmarkIds: ['a'] }]);
+  });
+
+  it.each([
+    { groups: [{ title: 'New', bookmarkIds: ['a', 'unknown'] }] },
+    { groups: [{ title: 'New', bookmarkIds: ['a', 'a'] }] },
+    { groups: [{ title: 'New', bookmarkIds: [1, 2] }] },
+    { groups: [{ title: 'New', bookmarkIds: ['a'] }] },
+    { groups: [{ targetFolderId: 'outside', bookmarkIds: ['a'] }] },
+    { groups: [{ title: 'development', bookmarkIds: ['a', 'b'] }] },
+    {
+      groups: [
+        { targetFolderId: '20', bookmarkIds: ['a'] },
+        { targetFolderId: '20', bookmarkIds: ['b'] },
+      ],
+    },
+    { groups: [null] },
+    { groups: 'invalid' },
+  ])('rejects unsafe bookmark plans: %j', (response) => {
+    expect(() => parseBookmarkGroups(JSON.stringify(response), bookmarks, folders)).toThrow(
+      'errorBookmarkPlan',
+    );
+  });
+
+  it('sends only selected metadata and uses shared preferences, locale and transport', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  groups: [{ targetFolderId: '20', bookmarkIds: ['a'] }],
+                }),
+              },
+            },
+          ],
+        }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    await suggestBookmarkGroups(
+      { ...settings, instructions: 'Keep docs together' },
+      bookmarks.slice(0, 1),
+      folders,
+      'zh-CN',
+    );
+    const request = fetchMock.mock.calls[0]![1]!;
+    const body = JSON.parse(String(request.body));
+    const data = JSON.parse(body.messages[1].content);
+    expect(data).toEqual({
+      bookmarks: [{ id: 'a', title: 'Docs', hostname: 'docs.example' }],
+      folders: [{ id: '20', title: 'Development' }],
+    });
+    expect(body.messages[0].content).toContain('Simplified Chinese');
+    expect(body.messages[0].content).toContain('Keep docs together');
+    expect(String(request.body)).not.toContain('private');
+    expect(request.credentials).toBe('omit');
+    expect(request.redirect).toBe('error');
+  });
+
+  it('rejects oversized requests before contacting the service', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(
+      suggestBookmarkGroups(
+        settings,
+        Array.from({ length: 201 }, (_, index) => ({ ...bookmarks[0]!, id: String(index) })),
+        folders,
+        'en',
+      ),
+    ).rejects.toThrow('errorBookmarkSelection');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

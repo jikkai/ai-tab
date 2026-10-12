@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
 import type { IGroup } from '../types';
 import { applyGroups, eligibleTabs, undoLast } from '../tabs';
 
